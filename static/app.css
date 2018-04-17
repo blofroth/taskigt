@@ -1,0 +1,18 @@
+
+.menu {
+
+}
+
+.nodes {
+    background-color: #000;
+    color: #FFFF00;
+    font-family: "Lucida Console", monospace, serif;
+    list-style-type: none;
+}
+
+.node-value {
+    background-color: #000;
+    color: #FFFF00;
+    font-family: "Lucida Console", monospace, serif;
+    border: 0;
+}
