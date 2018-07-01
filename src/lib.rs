@@ -12,6 +12,10 @@ use slab::Slab;
 // assume copy
 type NodeIdx = usize;
 
+pub struct Context {
+    pub console: ConsoleService
+}
+
 pub enum NodeKind {
     Planned,
     Doing,
@@ -38,14 +42,11 @@ pub enum Msg {
     Noop
 }
 
-impl<CTX> Component<CTX> for Model
-    where
-        CTX: AsMut<ConsoleService>,
-{
-    type Msg = Msg;
+impl Component<Context> for Model {
+    type Message = Msg;
     type Properties = ();
 
-    fn create(_: Self::Properties, _: &mut Env<CTX, Self>) -> Self {
+    fn create(_: Self::Properties, _: &mut Env<Context, Self>) -> Self {
         let mut nodes = Slab::new();
         let root_node_id = nodes.insert(Node {
             kind: Info,
@@ -55,24 +56,24 @@ impl<CTX> Component<CTX> for Model
         Model { root_node_id, nodes }
     }
 
-    fn update(&mut self, msg: Self::Msg, context: &mut Env<CTX, Self>) -> ShouldRender {
+    fn update(&mut self, msg: Self::Message, context: &mut Env<Context, Self>) -> ShouldRender {
         match msg {
             Msg::Edit(idx, new_value) => {
                 if new_value.len() > 0 {
-                    context.as_mut().log(&format!("changed {} to {}", idx, new_value));
+                    context.console.log(&format!("changed {} to {}", idx, new_value));
                     self.nodes[idx].text = new_value;
                 } else {
                     // TODO should delete, need parent index
-                    context.as_mut().log(&format!("TODO delete {}", idx));
+                    context.console.log(&format!("TODO delete {}", idx));
                 }
             }
             Msg::Delete(parent_idx, child_idx) => {
-                context.as_mut().log(&format!("del - {} from {}", child_idx, parent_idx));
+                context.console.log(&format!("del - {} from {}", child_idx, parent_idx));
                 self.nodes[parent_idx].children_ids
                     .remove_item(&child_idx);
             }
             Msg::Add(parent_idx, child_pos) => {
-                context.as_mut().log(&format!("add - at pos {} in node {}",
+                context.console.log(&format!("add - at pos {} in node {}",
                                               child_pos, parent_idx));
                 let new_child = self.nodes.insert(Node {
                     kind: Info,
@@ -88,17 +89,15 @@ impl<CTX> Component<CTX> for Model
     }
 }
 
-fn view_node<CTX>(node: NodeIdx, nodes: &Slab<Node>) -> Html<CTX, Model>
-    where
-        CTX: AsMut<ConsoleService> + 'static,
-{
+fn view_node(node: NodeIdx, nodes: &Slab<Node>) -> Html<Context, Model> {
     let new_idx = nodes[node].children_ids.len();
     html! {
         <li>
-            <input class="node-value", value=&nodes[node].text,
-                oninput=move |e: InputData| Msg::Edit(node, e.value),
-                onkeypress=move |e: KeyData| {
-                       if e.key == "Enter" { Msg::Add(node, new_idx) } else { Msg::Noop }
+            <input class="node-value",
+                oninput=|e| Msg::Edit(node, e.value),
+                value=&nodes[node].text,
+                onkeypress=|e| {
+                       if e.key() == "Enter" { Msg::Add(node, new_idx) } else { Msg::Noop }
                }, />
             <ul class="nodes",>
             { for nodes[node].children_ids.iter().map(|child_id| {
@@ -109,11 +108,8 @@ fn view_node<CTX>(node: NodeIdx, nodes: &Slab<Node>) -> Html<CTX, Model>
     }
 }
 
-impl<CTX> Renderable<CTX, Model> for Model
-    where
-        CTX: AsMut<ConsoleService> + 'static,
-{
-    fn view(&self) -> Html<CTX, Self> {
+impl Renderable<Context, Model> for Model {
+    fn view(&self) -> Html<Context, Self> {
         html! {
             <div>
                 <nav class="menu",>
