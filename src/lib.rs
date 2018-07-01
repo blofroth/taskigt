@@ -27,7 +27,8 @@ pub enum NodeKind {
 pub struct Node {
     kind: NodeKind,
     text: String,
-    children_ids: Vec<NodeIdx>
+    children_ids: Vec<NodeIdx>,
+    parent: Option<NodeIdx>
 }
 
 pub struct Model {
@@ -37,7 +38,7 @@ pub struct Model {
 
 pub enum Msg {
     Edit(NodeIdx, String),
-    Delete(NodeIdx, NodeIdx),
+    Delete(NodeIdx),
     Add(NodeIdx, usize),
     Noop
 }
@@ -51,7 +52,8 @@ impl Component<Context> for Model {
         let root_node_id = nodes.insert(Node {
             kind: Info,
             text: "Root".to_string(),
-            children_ids: vec![]
+            children_ids: vec![],
+            parent: None
         });
         Model { root_node_id, nodes }
     }
@@ -63,14 +65,19 @@ impl Component<Context> for Model {
                     context.console.log(&format!("changed {} to {}", idx, new_value));
                     self.nodes[idx].text = new_value;
                 } else {
-                    // TODO should delete, need parent index
-                    context.console.log(&format!("TODO delete {}", idx));
+                    self.update(Msg::Delete(idx), context);
                 }
             }
-            Msg::Delete(parent_idx, child_idx) => {
-                context.console.log(&format!("del - {} from {}", child_idx, parent_idx));
-                self.nodes[parent_idx].children_ids
-                    .remove_item(&child_idx);
+            Msg::Delete(child_idx) => {
+                let parent_idx = self.nodes[child_idx].parent;
+                let num_children = self.nodes[child_idx].children_ids.len();
+                parent_idx.map(|idx| {
+                    if num_children == 0 {
+                        context.console.log(&format!("del - {} from {}", child_idx, idx));
+                        self.nodes[idx].children_ids
+                            .remove_item(&child_idx);
+                    }
+                });
             }
             Msg::Add(parent_idx, child_pos) => {
                 context.console.log(&format!("add - at pos {} in node {}",
@@ -78,7 +85,8 @@ impl Component<Context> for Model {
                 let new_child = self.nodes.insert(Node {
                     kind: Info,
                     text: "Child".to_string(),
-                    children_ids: vec![]
+                    children_ids: vec![],
+                    parent: Some(parent_idx)
                 });
                 self.nodes[parent_idx].children_ids
                     .insert(child_pos, new_child);
