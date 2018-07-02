@@ -1,0 +1,9 @@
+[package]
+name = "taskigt"
+version = "0.1.0"
+authors = ["Björn Löfroth <bjorn.lofroth@ffcg.se>"]
+
+[dependencies]
+stdweb = "0.4.2"
+yew = "0.4"
+failure = "0.1"
