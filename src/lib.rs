@@ -2,6 +2,6 @@
 extern crate yew;
 extern crate failure;
 
-pub mod model;
+pub mod itemtree;
 pub mod view;
 pub mod storage;

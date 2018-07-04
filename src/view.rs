@@ -1,7 +1,7 @@
 use yew::prelude::*;
 use yew::services::console::{ConsoleService};
-use model::{Model, Node, NodeIdx};
-use model::NodeKind::*;
+use itemtree::{ItemTree, Item, ItemId};
+use itemtree::ItemKind::*;
 use storage::LocalDocumentStorage;
 use std::mem;
 
@@ -11,53 +11,53 @@ pub struct Context {
 }
 
 pub enum Msg {
-    Edit(NodeIdx, String),
+    Edit(ItemId, String),
     EditTitle(String),
-    Delete(NodeIdx),
-    Add(NodeIdx, usize),
+    Delete(ItemId),
+    Add(ItemId, usize),
     Save,
     Restore,
     Noop
 }
 
-impl Component<Context> for Model {
+impl Component<Context> for ItemTree {
     type Message = Msg;
     type Properties = ();
 
     fn create(_: Self::Properties, _: &mut Env<Context, Self>) -> Self {
-        Model::new("")
+        ItemTree::new("")
     }
 
     fn update(&mut self, msg: Self::Message, context: &mut Env<Context, Self>) -> ShouldRender {
         let root = self.root();
         match msg {
-            Msg::Edit(idx, new_value) => {
+            Msg::Edit(id, new_value) => {
                 if new_value.len() > 0 {
-                    context.console.log(&format!("changed {} to {}", idx, new_value));
-                    self.nodes[idx] = Node::parse(&new_value);
+                    context.console.log(&format!("changed {} to {}", id, new_value));
+                    self.nodes[id] = Item::parse(&new_value);
                 } else {
-                    self.update(Msg::Delete(idx), context);
+                    self.update(Msg::Delete(id), context);
                 }
             },
             Msg::EditTitle(title) => { self.nodes[root].text = title; },
-            Msg::Delete(child_idx) => {
-                let parent_idx = self.parent(child_idx);
-                let num_children = self.nodes[child_idx].children_ids.len();
-                parent_idx.map(|idx| {
+            Msg::Delete(child_id) => {
+                let parent_id = self.parent(child_id);
+                let num_children = self.nodes[child_id].children_ids.len();
+                parent_id.map(|id| {
                     if num_children == 0 {
-                        context.console.log(&format!("del - {} from {}", child_idx, idx));
-                        let index = self.nodes[idx].children_ids.iter()
-                            .position(|child| *child == child_idx).unwrap();
-                        self.nodes[idx].children_ids
+                        context.console.log(&format!("del - {} from {}", child_id, id));
+                        let index = self.nodes[id].children_ids.iter()
+                            .position(|child| *child == child_id).unwrap();
+                        self.nodes[id].children_ids
                             .remove(index);
                     }
                 });
             }
-            Msg::Add(parent_idx, child_pos) => {
+            Msg::Add(parent_id, child_pos) => {
                 context.console.log(&format!("add - at pos {} in node {}",
-                                             child_pos, parent_idx));
-                self.add_child_at(parent_idx, child_pos,
-                                  Node::leaf(Info, ""));
+                                             child_pos, parent_id));
+                self.add_child_at(parent_id, child_pos,
+                                  Item::leaf(Info, ""));
             },
             Msg::Save => {
                 context.storage.save(&self.title(),
@@ -66,7 +66,7 @@ impl Component<Context> for Model {
             Msg::Restore => {
                 let title = self.title();
                 let mut model = context.storage.restore(&title)
-                    .map(|doc| Model::parse(&title, &doc))
+                    .map(|doc| ItemTree::parse(&title, &doc))
                     .expect("load document failure");
 
                 mem::swap(self, &mut model);
@@ -77,15 +77,15 @@ impl Component<Context> for Model {
     }
 }
 
-fn view_node(node: NodeIdx, nodes: &Vec<Node>) -> Html<Context, Model> {
-    let new_idx = nodes[node].children_ids.len();
+fn view_node(node: ItemId, nodes: &Vec<Item>) -> Html<Context, ItemTree> {
+    let new_id = nodes[node].children_ids.len();
     html! {
         <li>
             <input class="node-value",
                 oninput=|e| Msg::Edit(node, e.value),
                 value=&nodes[node].display(),
                 onkeypress=|e| {
-                       if e.key() == "Enter" { Msg::Add(node, new_idx) } else { Msg::Noop }
+                       if e.key() == "Enter" { Msg::Add(node, new_id) } else { Msg::Noop }
                }, />
             <ul class="nodes",>
             { for nodes[node].children_ids.iter().map(|child_id| {
@@ -96,7 +96,7 @@ fn view_node(node: NodeIdx, nodes: &Vec<Node>) -> Html<Context, Model> {
     }
 }
 
-fn build_text_rec(level: usize, buffer: &mut String, node: NodeIdx, nodes: &Vec<Node>) {
+fn build_text_rec(level: usize, buffer: &mut String, node: ItemId, nodes: &Vec<Item>) {
     buffer.push_str(&" ".repeat(level * 2));
     buffer.push_str(&nodes[node].display());
     buffer.push('\n');
@@ -105,13 +105,13 @@ fn build_text_rec(level: usize, buffer: &mut String, node: NodeIdx, nodes: &Vec<
     }
 }
 
-fn build_text(start: NodeIdx, nodes: &Vec<Node>) -> String {
+fn build_text(start: ItemId, nodes: &Vec<Item>) -> String {
     let mut buffer = String::new();
     build_text_rec(1, &mut buffer, start, nodes);
     buffer
 }
 
-fn view_as_text(node: NodeIdx, nodes: &Vec<Node>) -> Html<Context, Model> {
+fn view_as_text(node: ItemId, nodes: &Vec<Item>) -> Html<Context, ItemTree> {
     html! {
         <div>
             <h1>{ "Export" }</h1>
@@ -120,7 +120,7 @@ fn view_as_text(node: NodeIdx, nodes: &Vec<Node>) -> Html<Context, Model> {
     }
 }
 
-impl Renderable<Context, Model> for Model {
+impl Renderable<Context, ItemTree> for ItemTree {
     fn view(&self) -> Html<Context, Self> {
         html! {
             <div>
