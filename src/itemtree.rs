@@ -144,7 +144,11 @@ impl ItemTree {
         let new_id = self.nodes.len();
         self.nodes.push(child);
         self.parents.push(Some(parent));
-        self.nodes[parent].children_ids.insert(new_id, pos);
+        if pos >= self.nodes[parent].children_ids.len() {
+            self.nodes[parent].children_ids.push(new_id)
+        } else {
+            self.nodes[parent].children_ids.insert(new_id, pos);
+        }
         new_id
     }
 

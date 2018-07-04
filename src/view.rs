@@ -1,5 +1,7 @@
 use yew::prelude::*;
 use yew::services::console::{ConsoleService};
+use yew::virtual_dom::vtext::VText;
+use yew::virtual_dom::vnode::VNode;
 use itemtree::{ItemTree, Item, ItemId};
 use itemtree::ItemKind::*;
 use storage::LocalDocumentStorage;
@@ -32,8 +34,11 @@ impl Component<Context> for Model {
     type Properties = ();
 
     fn create(_: Self::Properties, _: &mut Env<Context, Self>) -> Self {
+        let mut curr_tree = ItemTree::new("My items");
+        let root = curr_tree.root();
+        curr_tree.add_child(root, Item::leaf(Info, ""));
         Model {
-            curr_tree: ItemTree::new("My items"),
+            curr_tree,
             restore_document_name: "".to_string(),
             pasted_document: "".to_string()
         }
@@ -91,37 +96,55 @@ impl Component<Context> for Model {
     }
 }
 
-fn view_node(node: ItemId, nodes: &Vec<Item>) -> Html<Context, Model> {
+fn view_item(id: ItemId, item: &Item) -> Html<Context, Model> {
+    let new_pos = item.children_ids.len();
+    html! {
+        <input class="node-value",
+                oninput=|e| Msg::Edit(id, e.value),
+                value=&item.display(),
+                onkeypress=|e| {
+                       if e.key() == "Enter" { Msg::Add(id, new_pos) } else { Msg::Noop }
+               }, />
+    }
+}
+
+fn view_node(node: ItemId, nodes: &Vec<Item>, display_item: bool) -> Html<Context, Model> {
     let new_id = nodes[node].children_ids.len();
     html! {
         <li>
-            <input class="node-value",
-                oninput=|e| Msg::Edit(node, e.value),
-                value=&nodes[node].display(),
-                onkeypress=|e| {
-                       if e.key() == "Enter" { Msg::Add(node, new_id) } else { Msg::Noop }
-               }, />
+            {
+                if display_item {
+                    view_item(node, &nodes[node])
+                } else {
+                    // hack for missing tag
+                    VNode::VText(VText::new("".to_string()))
+                }
+            }
             <ul class="nodes",>
             { for nodes[node].children_ids.iter().map(|child_id| {
-                view_node(child_id.clone(), nodes)
+                view_node(child_id.clone(), nodes, true)
             })}
             </ul>
         </li>
     }
 }
 
-fn build_text_rec(level: usize, buffer: &mut String, node: ItemId, nodes: &Vec<Item>) {
-    buffer.push_str(&" ".repeat(level * 2));
-    buffer.push_str(&nodes[node].display());
-    buffer.push('\n');
+fn build_text_rec(level: usize, buffer: &mut String, node: ItemId, nodes: &Vec<Item>,
+                  display_item: bool) {
+    if display_item {
+        buffer.push_str(&" ".repeat(level * 2));
+        buffer.push_str(&nodes[node].display());
+        buffer.push('\n');
+    }
+
     for child_id in &nodes[node].children_ids {
-        build_text_rec(level + 1, buffer, *child_id, nodes);
+        build_text_rec(level + 1, buffer, *child_id, nodes, true);
     }
 }
 
 fn build_text(start: ItemId, nodes: &Vec<Item>) -> String {
     let mut buffer = String::new();
-    build_text_rec(1, &mut buffer, start, nodes);
+    build_text_rec(1, &mut buffer, start, nodes, false);
     buffer
 }
 
@@ -141,8 +164,11 @@ impl Renderable<Context, Model> for Model {
                 <nav class="menu",>
                 </nav>
                 <div>
+                    <input class="document-title",
+                        oninput=|e| Msg::EditTitle(e.value),
+                        value=&self.curr_tree.title(), />
                     <ul class="nodes",>
-                        { view_node(self.curr_tree.root(), &self.curr_tree.nodes) }
+                        { view_node(self.curr_tree.root(), &self.curr_tree.nodes, false) }
                     </ul>
                 </div>
                 <button onclick=|_| Msg::Save,>
