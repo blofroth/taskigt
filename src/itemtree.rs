@@ -13,6 +13,7 @@ pub enum ItemKind {
     Done,
     Info,
     Verbatim(Option<String>)
+    // possibly add empty/none?
 }
 
 impl ItemKind {
@@ -26,17 +27,17 @@ impl ItemKind {
         }
     }
 
-    pub fn parse(text: &str) -> Result<ItemKind, usize> {
+    pub fn parse(text: &str) -> (ItemKind, &str) {
         let first = text.chars().next();
         match first {
-            Some('?') => Ok(Planned),
-            Some('*') => Ok(Doing),
-            Some('#') => Ok(Done),
-            Some('-') => Ok(Info),
-            Some('|') => Ok(Verbatim(None)),
-            // should not really happen?
-            None => Err(0),
-            _ => Err(1)
+            Some('?') => (Planned, &text[1..]),
+            Some('*') => (Doing, &text[1..]),
+            Some('#') => (Done, &text[1..]),
+            Some('-') => (Info, &text[1..]),
+            Some('|') => (Verbatim(None), &text[1..]),
+            // default to info
+            None => (Info, text),
+            _ => (Info, text)
         }
     }
 }
@@ -67,19 +68,14 @@ impl Item {
     }
 
     pub fn parse(line: &str) -> Item {
-        let maybe_kind = ItemKind::parse(&line);
-        let skip = if let Err(skip) = maybe_kind {
-            skip
+        let (kind, rest) = ItemKind::parse(&line);
+        let rest = if rest.chars().next() == Some(' ') {
+            &rest[1..]
         } else {
-            2
+            rest
         };
 
-        println!("skip: {}, line: {}", skip, line);
-
-        let kind = maybe_kind.unwrap_or(Info);
-
-        let text: String = line.chars().skip(skip).collect();
-        Item::leaf(kind, &text)
+        Item::leaf(kind, rest)
     }
 }
 
@@ -225,5 +221,10 @@ mod tests {
             ]),
             tree
         );
+    }
+
+    #[test]
+    fn parse_slim_item() {
+        assert_eq!(Item::leaf(Info, "myitem"), Item::parse("-myitem"));
     }
 }
