@@ -20,6 +20,8 @@ pub enum Msg {
     Add(ItemId, usize),
     Save,
     Restore,
+    EditPastedDocument(String),
+    LoadFromPasted,
     Noop
 }
 
@@ -89,6 +91,14 @@ impl Component<Context> for Model {
                     .expect("load document failure");
 
                 mem::swap(&mut self.curr_tree, &mut parsed_tree);
+            },
+            Msg::EditPastedDocument(content) => {
+                self.pasted_document = content;
+            },
+            Msg::LoadFromPasted => {
+                let mut parsed_tree =
+                    ItemTree::parse("Pasted", &self.pasted_document);
+                mem::swap(&mut self.curr_tree, &mut parsed_tree);
             }
             Msg::Noop => {}
         }
@@ -109,7 +119,6 @@ fn view_item(id: ItemId, item: &Item) -> Html<Context, Model> {
 }
 
 fn view_node(node: ItemId, nodes: &Vec<Item>, display_item: bool) -> Html<Context, Model> {
-    let new_id = nodes[node].children_ids.len();
     html! {
         <li>
             {
@@ -157,6 +166,24 @@ fn view_as_text(node: ItemId, nodes: &Vec<Item>) -> Html<Context, Model> {
     }
 }
 
+fn paste_area(content: &str) -> Html<Context, Model> {
+    html! {
+        <div>
+            <h2>{ "Paste document" }</h2>
+            <button onclick=|_| Msg::LoadFromPasted,>
+                { "Load pasted" }
+            </button>
+            <br />
+            <textarea rows=40, cols=120,
+                value=content,
+                oninput=|e| Msg::EditPastedDocument(e.value),
+                placeholder="pasted document",>
+            </textarea>
+
+        </div>
+    }
+}
+
 impl Renderable<Context, Model> for Model {
     fn view(&self) -> Html<Context, Self> {
         html! {
@@ -182,6 +209,7 @@ impl Renderable<Context, Model> for Model {
                     { "Restore document" }
                 </button>
                 { view_as_text(self.curr_tree.root(), &self.curr_tree.nodes) }
+                { paste_area(&self.pasted_document) }
             </div>
         }
     }
