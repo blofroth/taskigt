@@ -2,7 +2,7 @@ use yew::prelude::*;
 use yew::services::console::{ConsoleService};
 use yew::virtual_dom::vtext::VText;
 use yew::virtual_dom::vnode::VNode;
-use itemtree::{ItemTree, Item, ItemId};
+use itemtree::{ItemTree, Item, ItemId, ItemKind};
 use itemtree::ItemKind::*;
 use storage::LocalDocumentStorage;
 use std::mem;
@@ -106,10 +106,17 @@ impl Component<Context> for Model {
     }
 }
 
+fn kind_class(kind: &ItemKind) -> &'static str {
+    match *kind {
+        Verbatim(_) => "node-value-verbatim",
+        _ => "node-value"
+    }
+}
+
 fn view_item(id: ItemId, item: &Item) -> Html<Context, Model> {
     let new_pos = item.children_ids.len();
     html! {
-        <input class="node-value",
+        <input class=kind_class(&item.kind),
                 oninput=|e| Msg::Edit(id, e.value),
                 value=&item.display(),
                 onkeypress=|e| {

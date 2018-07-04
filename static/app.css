@@ -19,6 +19,14 @@
     width: 100%;
 }
 
+.node-value-verbatim {
+    background-color: #666;
+    color: #FFFF00;
+    font-family: "Lucida Console", monospace, serif;
+    border: 0;
+    width: 100%;
+}
+
 .document-title {
     background-color: #000;
     color: #FFFF00;
