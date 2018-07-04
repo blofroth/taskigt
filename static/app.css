@@ -17,6 +17,7 @@
     font-family: "Lucida Console", monospace, serif;
     border: 0;
     width: 100%;
+    font-size: 0.8em;
 }
 
 .node-value-verbatim {

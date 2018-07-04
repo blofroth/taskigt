@@ -11,6 +11,7 @@ pub enum ItemKind {
     Planned,
     Doing,
     Done,
+    Blocked,
     Info,
     Verbatim(Option<String>)
     // possibly add empty/none?
@@ -22,6 +23,7 @@ impl ItemKind {
             Planned => "?",
             Doing => "*",
             Done => "#",
+            Blocked => "!",
             Info => "-",
             Verbatim(_syntax) => "|"
         }
@@ -33,6 +35,7 @@ impl ItemKind {
             Some('?') => (Planned, &text[1..]),
             Some('*') => (Doing, &text[1..]),
             Some('#') => (Done, &text[1..]),
+            Some('!') => (Blocked, &text[1..]),
             Some('-') => (Info, &text[1..]),
             Some('|') => (Verbatim(None), &text[1..]),
             // default to info
@@ -146,6 +149,22 @@ impl ItemTree {
             self.nodes[parent].children_ids.insert(new_id, pos);
         }
         new_id
+    }
+
+    pub fn remove_if_leaf(&mut self, item_id: ItemId) -> bool {
+        let parent_id = self.parent(item_id);
+        let num_children = self.nodes[item_id].children_ids.len();
+        parent_id.map(|parent| {
+            if num_children == 0 {
+                let index = self.nodes[parent].children_ids.iter()
+                    .position(|child| *child == item_id).unwrap();
+                self.nodes[parent].children_ids
+                    .remove(index);
+                true
+            } else {
+                false
+            }
+        }).unwrap_or(false)
     }
 
     pub fn append(&mut self, parent: ItemId, kind: ItemKind, other: &mut ItemTree) {

@@ -1,11 +1,10 @@
 use yew::prelude::*;
 use yew::services::console::{ConsoleService};
-use yew::virtual_dom::vtext::VText;
-use yew::virtual_dom::vnode::VNode;
 use itemtree::{ItemTree, Item, ItemId, ItemKind};
 use itemtree::ItemKind::*;
 use storage::LocalDocumentStorage;
 use std::mem;
+use std::collections::HashSet;
 
 pub struct Context {
     pub console: ConsoleService,
@@ -13,22 +12,62 @@ pub struct Context {
 }
 
 pub enum Msg {
+    // item tree manipulation
     Edit(ItemId, String),
-    EditTitle(String),
-    EditRestoreDocument(String),
     Delete(ItemId),
     Add(ItemId, usize),
+    EditTitle(String),
+
+    // folding
+    ToggleFold(ClickEvent, ItemId),
+    FoldOffspring(ItemId,bool),
+    ExpandOffspring(ItemId,bool),
+    // save/restore
     Save,
+    EditRestoreDocument(String),
     Restore,
+
+    // pasting
     EditPastedDocument(String),
     LoadFromPasted,
+
     Noop
 }
+
+const README: &'static str =
+r#" - Hierarchical item based note taking
+- Different item types
+  - Informational
+  * Task (Doing)
+  ? Task (Planned)
+  # Task (Done)
+  ! Task (Blocked/Waiting)
+  | Verbatim/quote
+- Controls
+  | <ctrl/cmd> + *left-click*
+    - toggle item visibility (including sub item)
+  | <enter>
+    - Create new sub item (last of children, informational)
+  | <tab>
+    - Move to next item (horizontally)
+  | <shift> + <tab>
+    - Move to previous item (horizontally)
+  | *clear content of item*
+    - Deletes the item, if there are no sub-items
+- Persistence
+  - [Save document]: saves the document to local web storage, using the current title as the document name
+    | https://developer.mozilla.org/en-US/docs/Web/API/Storage/LocalStorage
+  - [Restore document]: Restore the document with the supplied name from local storage
+- Export/import from text
+  - A textual representation of the current document is given under the 'As text' section
+  - Import to the current document (overwriting it!) by pasting into the 'Paste document' area, and clicking [Load pasted]
+"#;
 
 pub struct Model {
     curr_tree: ItemTree,
     restore_document_name: String,
-    pasted_document: String
+    pasted_document: String,
+    hidden_node_ids: HashSet<ItemId>
 }
 
 impl Component<Context> for Model {
@@ -36,13 +75,12 @@ impl Component<Context> for Model {
     type Properties = ();
 
     fn create(_: Self::Properties, _: &mut Env<Context, Self>) -> Self {
-        let mut curr_tree = ItemTree::new("My items");
-        let root = curr_tree.root();
-        curr_tree.add_child(root, Item::leaf(Info, ""));
+        let curr_tree = ItemTree::parse("My items", README);
         Model {
             curr_tree,
             restore_document_name: "".to_string(),
-            pasted_document: "".to_string()
+            pasted_document: "".to_string(),
+            hidden_node_ids: HashSet::new()
         }
     }
 
@@ -52,30 +90,54 @@ impl Component<Context> for Model {
             Msg::Edit(id, new_value) => {
                 if new_value.len() > 0 {
                     context.console.log(&format!("changed {} to {}", id, new_value));
-                    self.curr_tree.nodes[id] = Item::parse(&new_value);
+                    let mut new_item = Item::parse(&new_value);
+                    // use new item, old children_ids
+                    mem::swap(&mut new_item, &mut self.curr_tree.nodes[id]);
+                    mem::swap(&mut new_item.children_ids,
+                              &mut self.curr_tree.nodes[id].children_ids);
                 } else {
                     self.update(Msg::Delete(id), context);
                 }
             },
             Msg::EditTitle(title) => { self.curr_tree.nodes[root].text = title; },
             Msg::Delete(child_id) => {
-                let parent_id = self.curr_tree.parent(child_id);
-                let num_children = self.curr_tree.nodes[child_id].children_ids.len();
-                parent_id.map(|id| {
-                    if num_children == 0 {
-                        context.console.log(&format!("del - {} from {}", child_id, id));
-                        let index = self.curr_tree.nodes[id].children_ids.iter()
-                            .position(|child| *child == child_id).unwrap();
-                        self.curr_tree.nodes[id].children_ids
-                            .remove(index);
-                    }
-                });
+                let removed = self.curr_tree.remove_if_leaf(child_id);
+                if removed {
+                    context.console.log(&format!("del - {}", child_id));
+                }
             }
             Msg::Add(parent_id, child_pos) => {
                 context.console.log(&format!("add - at pos {} in node {}",
                                              child_pos, parent_id));
                 self.curr_tree.add_child_at(parent_id, child_pos,
                                   Item::leaf(Info, ""));
+            },
+            Msg::ToggleFold(click, id) => {
+                if click.meta_key() {
+                    context.console.log(&format!("toggle node - {}", id));
+                    let was_hidden = self.hidden_node_ids.contains(&id);
+                    if was_hidden {
+                        self.hidden_node_ids.remove(&id);
+                    } else {
+                        self.hidden_node_ids.insert(id);
+                    }
+                }
+            }
+            Msg::FoldOffspring(id, and_self) => {
+                if and_self {
+                    self.hidden_node_ids.insert(id);
+                }
+                for child_id in self.curr_tree.nodes[id].children_ids.clone() {
+                    self.update(Msg::FoldOffspring(child_id, true), context);
+                }
+            },
+            Msg::ExpandOffspring(id, and_self) => {
+                if and_self {
+                    self.hidden_node_ids.remove(&id);
+                }
+                for child_id in self.curr_tree.nodes[id].children_ids.clone() {
+                    self.update(Msg::ExpandOffspring(child_id, true), context);
+                }
             },
             Msg::Save => {
                 context.storage.save(&self.curr_tree.title(),
@@ -118,6 +180,7 @@ fn view_item(id: ItemId, item: &Item) -> Html<Context, Model> {
     html! {
         <input class=kind_class(&item.kind),
                 oninput=|e| Msg::Edit(id, e.value),
+                onclick=|e| Msg::ToggleFold(e, id),
                 value=&item.display(),
                 onkeypress=|e| {
                        if e.key() == "Enter" { Msg::Add(id, new_pos) } else { Msg::Noop }
@@ -125,7 +188,9 @@ fn view_item(id: ItemId, item: &Item) -> Html<Context, Model> {
     }
 }
 
-fn view_node(node: ItemId, nodes: &Vec<Item>, display_item: bool) -> Html<Context, Model> {
+fn view_node(node: ItemId, nodes: &Vec<Item>, hidden: &HashSet<ItemId>, display_item: bool) -> Html<Context, Model> {
+    let hide_ya_kids = hidden.contains(&node);
+    let num_children = nodes[node].children_ids.len();
     html! {
         <li>
             {
@@ -133,14 +198,33 @@ fn view_node(node: ItemId, nodes: &Vec<Item>, display_item: bool) -> Html<Contex
                     view_item(node, &nodes[node])
                 } else {
                     // hack for missing tag
-                    VNode::VText(VText::new("".to_string()))
+                    html!{ <input type="hidden", />}
                 }
             }
-            <ul class="nodes",>
-            { for nodes[node].children_ids.iter().map(|child_id| {
-                view_node(child_id.clone(), nodes, true)
-            })}
-            </ul>
+
+            {
+                if hide_ya_kids {
+                    if num_children > 0 {
+                        html!{
+                            <ul class="nodes",>
+                                <li class="node-value", >{"[...]"}</li>
+                            </ul>
+                        }
+                    } else {
+                        // hack for missing tag
+                        html!{ <input type="hidden", />}
+                    }
+                } else {
+                    html!{
+                        <ul class="nodes",>
+                        { for nodes[node].children_ids.iter().map(|child_id| {
+                            view_node(child_id.clone(), nodes, hidden, true)
+                        })}
+                        </ul>
+                    }
+                }
+            }
+
         </li>
     }
 }
@@ -167,7 +251,7 @@ fn build_text(start: ItemId, nodes: &Vec<Item>) -> String {
 fn view_as_text(node: ItemId, nodes: &Vec<Item>) -> Html<Context, Model> {
     html! {
         <div>
-            <h1>{ "Export" }</h1>
+            <h1>{ "As text" }</h1>
             <pre>{ build_text(node, nodes) }</pre>
         </div>
     }
@@ -198,23 +282,35 @@ impl Renderable<Context, Model> for Model {
                 <nav class="menu",>
                 </nav>
                 <div>
-                    <input class="document-title",
-                        oninput=|e| Msg::EditTitle(e.value),
-                        value=&self.curr_tree.title(), />
+                    <div>
+                        <input class="document-title",
+                            oninput=|e| Msg::EditTitle(e.value),
+                            onclick=|e| Msg::ToggleFold(e, 0),
+                            value=&self.curr_tree.title(), />
+                    </div>
+                    <div>
+                        <button onclick=|_| Msg::Save,>
+                            { "Save document" }
+                        </button>
+                        <br />
+                        <button onclick=|_| Msg::FoldOffspring(0, false),>
+                            { "Fold all" }
+                        </button>
+                        <button onclick=|_| Msg::ExpandOffspring(0, false),>
+                            { "Expand all" }
+                        </button>
+                        <br />
+                        <input
+                            oninput=|e| Msg::EditRestoreDocument(e.value),
+                            value=&self.restore_document_name, />
+                        <button onclick=|_| Msg::Restore, >
+                            { "Restore document" }
+                        </button>
+                    </div>
                     <ul class="nodes",>
-                        { view_node(self.curr_tree.root(), &self.curr_tree.nodes, false) }
+                        { view_node(self.curr_tree.root(), &self.curr_tree.nodes, &self.hidden_node_ids, false) }
                     </ul>
                 </div>
-                <button onclick=|_| Msg::Save,>
-                    { "Save document" }
-                </button>
-                <br />
-                <input
-                    oninput=|e| Msg::EditRestoreDocument(e.value),
-                    value=&self.restore_document_name, />
-                <button onclick=|_| Msg::Restore,>
-                    { "Restore document" }
-                </button>
                 { view_as_text(self.curr_tree.root(), &self.curr_tree.nodes) }
                 { paste_area(&self.pasted_document) }
             </div>
