@@ -13,6 +13,7 @@ pub struct Context {
 pub enum Msg {
     Edit(ItemId, String),
     EditTitle(String),
+    EditRestoreDocument(String),
     Delete(ItemId),
     Add(ItemId, usize),
     Save,
@@ -20,35 +21,45 @@ pub enum Msg {
     Noop
 }
 
-impl Component<Context> for ItemTree {
+pub struct Model {
+    curr_tree: ItemTree,
+    restore_document_name: String,
+    pasted_document: String
+}
+
+impl Component<Context> for Model {
     type Message = Msg;
     type Properties = ();
 
     fn create(_: Self::Properties, _: &mut Env<Context, Self>) -> Self {
-        ItemTree::new("")
+        Model {
+            curr_tree: ItemTree::new("My items"),
+            restore_document_name: "".to_string(),
+            pasted_document: "".to_string()
+        }
     }
 
     fn update(&mut self, msg: Self::Message, context: &mut Env<Context, Self>) -> ShouldRender {
-        let root = self.root();
+        let root = self.curr_tree.root();
         match msg {
             Msg::Edit(id, new_value) => {
                 if new_value.len() > 0 {
                     context.console.log(&format!("changed {} to {}", id, new_value));
-                    self.nodes[id] = Item::parse(&new_value);
+                    self.curr_tree.nodes[id] = Item::parse(&new_value);
                 } else {
                     self.update(Msg::Delete(id), context);
                 }
             },
-            Msg::EditTitle(title) => { self.nodes[root].text = title; },
+            Msg::EditTitle(title) => { self.curr_tree.nodes[root].text = title; },
             Msg::Delete(child_id) => {
-                let parent_id = self.parent(child_id);
-                let num_children = self.nodes[child_id].children_ids.len();
+                let parent_id = self.curr_tree.parent(child_id);
+                let num_children = self.curr_tree.nodes[child_id].children_ids.len();
                 parent_id.map(|id| {
                     if num_children == 0 {
                         context.console.log(&format!("del - {} from {}", child_id, id));
-                        let index = self.nodes[id].children_ids.iter()
+                        let index = self.curr_tree.nodes[id].children_ids.iter()
                             .position(|child| *child == child_id).unwrap();
-                        self.nodes[id].children_ids
+                        self.curr_tree.nodes[id].children_ids
                             .remove(index);
                     }
                 });
@@ -56,20 +67,23 @@ impl Component<Context> for ItemTree {
             Msg::Add(parent_id, child_pos) => {
                 context.console.log(&format!("add - at pos {} in node {}",
                                              child_pos, parent_id));
-                self.add_child_at(parent_id, child_pos,
+                self.curr_tree.add_child_at(parent_id, child_pos,
                                   Item::leaf(Info, ""));
             },
             Msg::Save => {
-                context.storage.save(&self.title(),
-                                     build_text(self.root(), &self.nodes));
-            }
+                context.storage.save(&self.curr_tree.title(),
+                                     build_text(self.curr_tree.root(),
+                                                &self.curr_tree.nodes));
+            },
+            Msg::EditRestoreDocument(doc_name) => {
+                self.restore_document_name = doc_name;
+            },
             Msg::Restore => {
-                let title = self.title();
-                let mut model = context.storage.restore(&title)
-                    .map(|doc| ItemTree::parse(&title, &doc))
+                let mut parsed_tree = context.storage.restore(&self.restore_document_name)
+                    .map(|doc| ItemTree::parse(&self.restore_document_name, &doc))
                     .expect("load document failure");
 
-                mem::swap(self, &mut model);
+                mem::swap(&mut self.curr_tree, &mut parsed_tree);
             }
             Msg::Noop => {}
         }
@@ -77,7 +91,7 @@ impl Component<Context> for ItemTree {
     }
 }
 
-fn view_node(node: ItemId, nodes: &Vec<Item>) -> Html<Context, ItemTree> {
+fn view_node(node: ItemId, nodes: &Vec<Item>) -> Html<Context, Model> {
     let new_id = nodes[node].children_ids.len();
     html! {
         <li>
@@ -111,7 +125,7 @@ fn build_text(start: ItemId, nodes: &Vec<Item>) -> String {
     buffer
 }
 
-fn view_as_text(node: ItemId, nodes: &Vec<Item>) -> Html<Context, ItemTree> {
+fn view_as_text(node: ItemId, nodes: &Vec<Item>) -> Html<Context, Model> {
     html! {
         <div>
             <h1>{ "Export" }</h1>
@@ -120,7 +134,7 @@ fn view_as_text(node: ItemId, nodes: &Vec<Item>) -> Html<Context, ItemTree> {
     }
 }
 
-impl Renderable<Context, ItemTree> for ItemTree {
+impl Renderable<Context, Model> for Model {
     fn view(&self) -> Html<Context, Self> {
         html! {
             <div>
@@ -128,19 +142,20 @@ impl Renderable<Context, ItemTree> for ItemTree {
                 </nav>
                 <div>
                     <ul class="nodes",>
-                        { view_node(self.root(), &self.nodes) }
+                        { view_node(self.curr_tree.root(), &self.curr_tree.nodes) }
                     </ul>
                 </div>
-                <input
-                    oninput=|e| Msg::EditTitle(e.value),
-                    value=self.title(), />
                 <button onclick=|_| Msg::Save,>
                     { "Save document" }
                 </button>
+                <br />
+                <input
+                    oninput=|e| Msg::EditRestoreDocument(e.value),
+                    value=&self.restore_document_name, />
                 <button onclick=|_| Msg::Restore,>
                     { "Restore document" }
                 </button>
-                { view_as_text(self.root(), &self.nodes) }
+                { view_as_text(self.curr_tree.root(), &self.curr_tree.nodes) }
             </div>
         }
     }

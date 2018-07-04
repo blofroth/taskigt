@@ -3,8 +3,7 @@ extern crate taskigt;
 
 use yew::prelude::*;
 use yew::services::console::ConsoleService;
-use taskigt::itemtree::ItemTree;
-use taskigt::view::Context;
+use taskigt::view::{Context, Model};
 use taskigt::storage::LocalDocumentStorage;
 
 fn main() {
@@ -13,7 +12,7 @@ fn main() {
         console: ConsoleService::new(),
         storage: LocalDocumentStorage::new()
     };
-    let app: App<_, ItemTree> = App::new(context);
+    let app: App<_, Model> = App::new(context);
     app.mount_to_body();
 
     yew::run_loop();
