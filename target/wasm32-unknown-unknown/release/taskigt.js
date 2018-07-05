@@ -642,7 +642,7 @@ Module.STDWEB_PRIVATE.acquire_tmp = function( dummy ) {
     if( typeof window === "undefined" && typeof process === "object" ) {
         const fs = require( "fs" );
         const path = require( "path" );
-        const wasm_path = path.join( __dirname, "taskigt.wasm" );
+        const wasm_path = path.join( __dirname, "target/wasm32-unknown-unknown/release/taskigt.wasm" );
         const buffer = fs.readFileSync( wasm_path );
         const mod = new WebAssembly.Module( buffer );
 
