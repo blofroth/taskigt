@@ -648,7 +648,7 @@ Module.STDWEB_PRIVATE.acquire_tmp = function( dummy ) {
 
         return __initialize( mod, false );
     } else {
-        return fetch( "taskigt.wasm", {credentials: "same-origin"} )
+        return fetch( "target/wasm32-unknown-unknown/release/taskigt.wasm", {credentials: "same-origin"} )
             .then( response => response.arrayBuffer() )
             .then( bytes => WebAssembly.compile( bytes ) )
             .then( mod => __initialize( mod, true ) );
