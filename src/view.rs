@@ -54,6 +54,8 @@ r#" - Hierarchical item based note taking
     - Move to previous item (horizontally)
   | *clear content of item*
     - Deletes the item, if there are no sub-items
+  | <ctrl> + <z>
+    - Undo textual edits (note: not item removals/additions!)
 - Persistence
   - [Save document]: saves the document to local web storage, using the current title as the document name
     | https://developer.mozilla.org/en-US/docs/Web/API/Storage/LocalStorage
