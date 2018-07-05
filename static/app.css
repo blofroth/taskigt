@@ -21,11 +21,12 @@
 }
 
 .node-value-verbatim {
-    background-color: #666;
+    background-color: #3E2723;
     color: #FFFF00;
     font-family: "Lucida Console", monospace, serif;
     border: 0;
     width: 100%;
+    font-size: 0.8em;
 }
 
 .document-title {
