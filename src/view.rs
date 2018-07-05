@@ -34,35 +34,50 @@ pub enum Msg {
     Noop
 }
 
-const README: &'static str =
-r#" - Hierarchical item based note taking
-- Different item types
-  - Informational
-  * Task (Doing)
-  ? Task (Planned)
-  # Task (Done)
-  ! Task (Blocked/Waiting)
-  | Verbatim/quote
-- Controls
-  | <ctrl/cmd> + *left-click*
-    - toggle item visibility (including sub item)
-  | <enter>
-    - Create new sub item (last of children, informational)
-  | <tab>
-    - Move to next item (horizontally)
-  | <shift> + <tab>
-    - Move to previous item (horizontally)
-  | *clear content of item*
-    - Deletes the item, if there are no sub-items
-  | <ctrl> + <z>
-    - Undo textual edits (note: not item removals/additions!)
-- Persistence
-  - [Save document]: saves the document to local web storage, using the current title as the document name
-    | https://developer.mozilla.org/en-US/docs/Web/API/Storage/LocalStorage
-  - [Restore document]: Restore the document with the supplied name from local storage
-- Export/import from text
-  - A textual representation of the current document is given under the 'As text' section
-  - Import to the current document (overwriting it!) by pasting into the 'Paste document' area, and clicking [Load pasted]
+/// The Taskigt-format consists of items, at different indentations
+/// that form a tree, subject to:
+/// * Each item is preceded by a bullet that indicates its type ('-','*','?','#','!', '|')
+/// * In a well formatted document, each bullet is at char column divisible by 2
+///   this means the first bullet should be in column 2 (0 indexed)
+/// * In a well formatted document, each bullet is followed by a space
+/// * A line can be all whitespace
+///
+/// Any text file can be parsed into the Taskigt format, and transformed to a well formatted
+/// document. Such a transformation should only mean a few possible changes:
+///  * Each line can be indented (in or out) by 1 space (or 2 if it starts at col 0)
+///  * The content of a line can be prefixed with a bullet and a space
+pub const README: &'static str =
+r#"  - Hierarchical item based note taking
+  - Different item types
+    - Informational
+    * Task (Doing)
+    ? Task (Planned)
+    # Task (Done)
+    ! Task (Blocked/Waiting)
+    | Verbatim/quote
+
+  - Controls
+    | <ctrl/cmd> + *left-click*
+      - toggle item visibility (including sub item)
+    | <enter>
+      - Create new sub item (last of children, informational)
+    | <tab>
+      - Move to next item (horizontally)
+    | <shift> + <tab>
+      - Move to previous item (horizontally)
+    | *clear content of item*
+      - Deletes the item, if there are no sub-items
+    | <ctrl> + <z>
+      - Undo textual edits (note: not item removals/additions!)
+
+  - Persistence
+    - [Save document]: saves the document to local web storage, using the current title as the document name
+      | https://developer.mozilla.org/en-US/docs/Web/API/Storage/LocalStorage
+    - [Restore document]: Restore the document with the supplied name from local storage
+
+  - Export/import from text
+    - A textual representation of the current document is given under the 'As text' section
+    - Import to the current document (overwriting it!) by pasting into the 'Paste document' area, and clicking [Load pasted]
 "#;
 
 pub struct Model {
@@ -234,8 +249,11 @@ fn view_node(node: ItemId, nodes: &Vec<Item>, hidden: &HashSet<ItemId>, display_
 fn build_text_rec(level: usize, buffer: &mut String, node: ItemId, nodes: &Vec<Item>,
                   display_item: bool) {
     if display_item {
-        buffer.push_str(&" ".repeat(level * 2));
-        buffer.push_str(&nodes[node].display());
+        // assumes starts at level 1
+        if nodes[node].kind != BlankLine {
+            buffer.push_str(&" ".repeat((level-1) * 2));
+            buffer.push_str(&nodes[node].display());
+        }
         buffer.push('\n');
     }
 
@@ -317,5 +335,17 @@ impl Renderable<Context, Model> for Model {
                 { paste_area(&self.pasted_document) }
             </div>
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn readme_is_well_formatted() {
+        let tree = ItemTree::parse("readme", README);
+        let tree_as_text = build_text(0, &tree.nodes);
+        assert_eq!(README, tree_as_text);
     }
 }
