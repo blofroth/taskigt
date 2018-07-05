@@ -1,0 +1,38 @@
+
+.menu {
+
+}
+
+.nodes {
+    background-color: #000;
+    color: #FFFF00;
+    font-family: "Lucida Console", monospace, serif;
+    list-style-type: none;
+    padding-left: 1em;
+}
+
+.node-value {
+    background-color: #000;
+    color: #FFFF00;
+    font-family: "Lucida Console", monospace, serif;
+    border: 0;
+    width: 100%;
+    font-size: 0.8em;
+}
+
+.node-value-verbatim {
+    background-color: #666;
+    color: #FFFF00;
+    font-family: "Lucida Console", monospace, serif;
+    border: 0;
+    width: 100%;
+}
+
+.document-title {
+    background-color: #000;
+    color: #FFFF00;
+    font-family: "Lucida Console", monospace, serif;
+    border: 0;
+    font-size: 1.5em;
+    padding: 0.3em;
+}
