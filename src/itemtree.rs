@@ -13,6 +13,8 @@ pub enum ItemKind {
     Done,
     Blocked,
     Info,
+    Blank,
+    BlankLine,
     Verbatim(Option<String>)
     // possibly add empty/none?
 }
@@ -25,6 +27,8 @@ impl ItemKind {
             Done => "#",
             Blocked => "!",
             Info => "-",
+            Blank => "",
+            BlankLine => "",
             Verbatim(_syntax) => "|"
         }
     }
@@ -71,6 +75,9 @@ impl Item {
     }
 
     pub fn parse(line: &str) -> Item {
+        if line.len() == 0 || line.chars().all(char::is_whitespace) {
+            return Item::leaf(Blank, "");
+        }
         let (kind, rest) = ItemKind::parse(&line);
         let rest = if rest.chars().next() == Some(' ') {
             &rest[1..]
@@ -91,13 +98,17 @@ pub struct ItemTree {
 }
 
 impl ItemTree {
-    fn parse_line(line: &str) -> (usize, Item) {
+    pub fn parse_line(line: &str) -> (usize, Item) {
         let nonspace_idx = line.find(|c| !char::is_whitespace(c));
         let spaces = nonspace_idx.unwrap_or(0);
         let indent = spaces / INDENT_SZ;
 
-        let node = Item::parse(&line[spaces..]);
-        println!("indent: {:?}, node: {:?}", indent, node);
+        let mut node = Item::parse(&line[spaces..]);
+        if indent == 0 && node.kind == Blank {
+            node.kind = BlankLine;
+        }
+
+        //println!("indent: {:?}, node: {:?}", indent, node);
         (indent, node)
     }
 
@@ -110,9 +121,13 @@ impl ItemTree {
 
         for line in content.lines() {
             let (indent, child) = ItemTree::parse_line(line);
+            let is_blankline = &child.kind == &BlankLine;
             let parent_id = *last_at_indent.get(&indent).unwrap_or(&root);
             let id = tree.add_child(parent_id, child);
-            last_at_indent.insert(indent + 1, id);
+            if !is_blankline {
+                // blanklines can't have children
+                last_at_indent.insert(indent + 1, id);
+            }
         }
 
         tree
@@ -228,6 +243,21 @@ mod tests {
     }
 
     #[test]
+    fn parse_indent() {
+        let (indent, item) = ItemTree::parse_line("");
+        assert_eq!(0, indent);
+        assert_eq!("", item.text);
+
+        let (indent, item) = ItemTree::parse_line(" - text");
+        assert_eq!(0, indent);
+        assert_eq!("text", item.text);
+
+        let (indent, item) = ItemTree::parse_line("  -text");
+        assert_eq!(1, indent);
+        assert_eq!("text", item.text);
+    }
+
+    #[test]
     fn parse_document() {
         let doc = "- dude\n  * sweet\n  ? what";
         let tree = ItemTree::parse("the doc", doc);
@@ -246,4 +276,5 @@ mod tests {
     fn parse_slim_item() {
         assert_eq!(Item::leaf(Info, "myitem"), Item::parse("-myitem"));
     }
+
 }
